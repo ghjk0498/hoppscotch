@@ -1988,6 +1988,7 @@
     "preview_data": "Preview data",
     "iterations_from_data": "Using {count} iterations from data file",
     "data_preview": "Data Preview",
+    "showing_first_x_rows": "Showing first {count} rows",
     "dataset_loaded": "Dataset loaded successfully",
     "dataset_too_large": "Dataset file is too large (max {size}MB)",
     "invalid_csv": "Invalid CSV file format",

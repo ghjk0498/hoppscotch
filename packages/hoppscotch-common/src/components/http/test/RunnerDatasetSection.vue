@@ -128,9 +128,15 @@
 
           <div class="border rounded bg-primaryLight border-divider">
             <div class="overflow-auto max-h-96 p-4">
+              <div
+                v-if="datasetRowCount > 20"
+                class="mb-4 p-2 bg-primary border-l-4 border-accent text-xs text-secondaryDark"
+              >
+                {{ t("collection_runner.showing_first_x_rows", { count: 20 }) }}
+              </div>
               <pre
                 class="text-xs"
-              ><code>{{ JSON.stringify(modelValue.data, null, 2) }}</code></pre>
+              ><code>{{ JSON.stringify(previewData, null, 2) }}</code></pre>
             </div>
           </div>
         </div>
@@ -185,6 +191,10 @@ const emit = defineEmits<{
 
 const showPreviewModal = ref(false)
 const datasetRowCount = computed(() => props.modelValue.data.length)
+
+const previewData = computed(() => {
+  return props.modelValue.data.slice(0, 20)
+})
 
 const handleFileUpload = async (event: Event, type: "json" | "csv") => {
   const file = (event.target as HTMLInputElement).files?.[0]
