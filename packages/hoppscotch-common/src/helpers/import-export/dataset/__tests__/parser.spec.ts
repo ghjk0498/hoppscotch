@@ -35,19 +35,17 @@ describe("getIterationDataVars", () => {
     expect(result[0].value).toBe("true")
   })
 
-  it("should correctly serialize objects using JSON.stringify (FAILING TEST)", () => {
+  it("should correctly serialize objects using JSON.stringify", () => {
     const iterationData = { key1: { sub: "val" } }
     const result = getIterationDataVars(iterationData)
 
-    // This is expected to fail with the current implementation (it will be "[object Object]")
     expect(result[0].value).toBe('{"sub":"val"}')
   })
 
-  it("should correctly serialize arrays using JSON.stringify (FAILING TEST)", () => {
+  it("should correctly serialize arrays using JSON.stringify", () => {
     const iterationData = { key1: [1, 2, 3] }
     const result = getIterationDataVars(iterationData)
 
-    // This is expected to fail with the current implementation (it will be "1,2,3")
     expect(result[0].value).toBe("[1,2,3]")
   })
 })
