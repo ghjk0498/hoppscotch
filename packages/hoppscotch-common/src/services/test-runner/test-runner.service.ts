@@ -73,15 +73,10 @@ export class TestRunnerService extends Service {
       testScript: collection.testScript ?? "",
     }
 
-    this.runTestCollection(
+    this.runTestsWithIterations(
       tab,
       collection,
       options,
-      [],
-      undefined,
-      undefined,
-      [],
-      undefined,
       ancestorPreRequestScripts,
       ancestorTestScripts
     )
@@ -104,6 +99,68 @@ export class TestRunnerService extends Service {
       })
   }
 
+  private async runTestsWithIterations(
+    tab: Ref<HoppTab<HoppTestRunnerDocument>>,
+    collection: HoppCollection,
+    options: TestRunnerOptions,
+    ancestorPreRequestScripts: string[] = [],
+    ancestorTestScripts: string[] = []
+  ) {
+    const dataset = (options as any).dataset
+    const hasDataset =
+      dataset?.enabled && dataset.data && dataset.data.length > 0
+
+    // Always use the user's iteration value
+    const iterations = options.iterations || 1
+
+    for (let iteration = 0; iteration < iterations; iteration++) {
+      if (options.stopRef?.value) {
+        tab.value.document.status = "stopped"
+        throw new Error("Test execution stopped")
+      }
+
+      // For iterations after the first, we don't reset the result collection
+      // This allows us to accumulate results across iterations
+      const shouldResetCollection = iteration === 0
+
+      // Get current iteration data if dataset is enabled
+      // If iteration exceeds dataset length, reuse the last dataset row
+      let iterationData: any = undefined
+      if (hasDataset && dataset.data) {
+        const dataIndex = Math.min(iteration, dataset.data.length - 1)
+        iterationData = dataset.data[dataIndex]
+      }
+
+      // Run the collection for this iteration
+      await this.runTestCollection(
+        tab,
+        collection,
+        options,
+        [],
+        undefined,
+        undefined,
+        [],
+        undefined,
+        ancestorPreRequestScripts,
+        ancestorTestScripts,
+        shouldResetCollection,
+        iterationData
+      )
+
+      // Add delay between iterations (except after the last one)
+      if (iteration < iterations - 1 && options.delay && options.delay > 0) {
+        try {
+          await delay(options.delay)
+        } catch (_error) {
+          if (options.stopRef?.value) {
+            tab.value.document.status = "stopped"
+            throw new Error("Test execution stopped")
+          }
+        }
+      }
+    }
+  }
+
   private async runTestCollection(
     tab: Ref<HoppTab<HoppTestRunnerDocument>>,
     collection: HoppCollection,
@@ -114,7 +171,9 @@ export class TestRunnerService extends Service {
     parentVariables: HoppCollection["variables"] = [],
     parentID?: string,
     parentPreRequestScripts: string[] = [],
-    parentTestScripts: string[] = []
+    parentTestScripts: string[] = [],
+    shouldResetFoldersAndRequests: boolean = true,
+    iterationData?: any
   ) {
     try {
       // Compute inherited auth and headers for this collection
@@ -198,11 +257,13 @@ export class TestRunnerService extends Service {
         const currentPath = [...parentPath, i]
 
         // Add request to the result collection before execution
-        this.addRequestToPath(
-          tab.value.document.resultCollection!,
-          currentPath,
-          cloneDeep(request)
-        )
+        if (shouldResetFoldersAndRequests) {
+          this.addRequestToPath(
+            tab.value.document.resultCollection!,
+            currentPath,
+            cloneDeep(request)
+          )
+        }
 
         // Update the request with inherited headers and auth before execution
         const finalRequest = {
@@ -222,7 +283,8 @@ export class TestRunnerService extends Service {
           currentPath,
           inheritedVariables,
           inheritedPreRequestScripts,
-          inheritedTestScripts
+          inheritedTestScripts,
+          iterationData
         )
 
         if (options.delay && options.delay > 0) {
@@ -315,7 +377,8 @@ export class TestRunnerService extends Service {
     path: number[],
     inheritedVariables: HoppCollectionVariable[] = [],
     inheritedPreRequestScripts: string[] = [],
-    inheritedTestScripts: string[] = []
+    inheritedTestScripts: string[] = [],
+    iterationData?: any
   ) {
     if (options.stopRef?.value) {
       throw new Error("Test execution stopped")
@@ -343,7 +406,8 @@ export class TestRunnerService extends Service {
         inheritedVariables,
         initialEnvironmentState,
         inheritedPreRequestScripts,
-        inheritedTestScripts
+        inheritedTestScripts,
+        iterationData
       )
 
       if (options.stopRef?.value) {

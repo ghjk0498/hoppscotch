@@ -101,6 +101,13 @@ export type TestRunnerConfig = {
   stopOnError: boolean
   persistResponses: boolean
   keepVariableValues: boolean
+  dataset?: {
+    enabled: boolean
+    data: Array<Record<string, any>>
+    source: "json" | "csv"
+    rawContent?: string
+    fileName?: string
+  }
 }
 
 export type HoppTestRunnerDocument = {
