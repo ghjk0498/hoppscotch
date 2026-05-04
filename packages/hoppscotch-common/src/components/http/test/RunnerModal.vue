@@ -242,6 +242,7 @@ import IconCopy from "~icons/lucide/copy"
 import IconHelpCircle from "~icons/lucide/help-circle"
 import IconPlay from "~icons/lucide/play"
 import { CurrentEnv } from "./Env.vue"
+import { DatasetConfig } from "./RunnerDatasetSection.vue"
 import { pipe } from "fp-ts/lib/function"
 import {
   getCompleteCollectionTree,
@@ -290,7 +291,7 @@ const environmentID = ref("")
 const currentEnv = ref<CurrentEnv>(null)
 
 // Dataset State
-const dataset = ref<any>({
+const dataset = ref<DatasetConfig>({
   enabled: false,
   data: [],
   source: null,
