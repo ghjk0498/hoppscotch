@@ -64,6 +64,7 @@ import { getCombinedEnvVariables } from "./utils/environments"
 import { transformInheritedCollectionVariablesToAggregateEnv } from "./utils/inheritedCollectionVarTransformer"
 import { isJSONContentType } from "./utils/contenttypes"
 import { applyScriptRequestUpdates } from "./experimental-sandbox-integration"
+import { getIterationDataVars } from "./import-export/dataset/parser"
 
 const secretEnvironmentService = getService(SecretEnvironmentService)
 const currentEnvironmentValueService = getService(CurrentValueService)
@@ -816,7 +817,8 @@ export async function runTestRunnerRequest(
   inheritedVariables: HoppCollectionVariable[] = [],
   initialEnvironmentState: InitialEnvironmentState,
   inheritedPreRequestScripts: string[] = [],
-  inheritedTestScripts: string[] = []
+  inheritedTestScripts: string[] = [],
+  iterationData?: Record<string, any>
 ): Promise<
   | E.Left<"script_fail">
   | E.Right<{
@@ -842,9 +844,20 @@ export async function runTestRunnerRequest(
   // Adds ~32ms latency but ensures immediate visual feedback
   await waitForBrowserPaint()
 
+  // Inject iteration data into environment variables if available
+  const iterationDataVars: Environment["variables"] = iterationData
+    ? getIterationDataVars(iterationData)
+    : []
+
+  const enrichedEnvs = {
+    global: initialEnvs.global,
+    selected: initialEnvs.selected,
+    temp: [...(initialEnvs.temp ?? []), ...iterationDataVars],
+  }
+
   return delegatePreRequestScriptRunner(
     request,
-    initialEnvs,
+    enrichedEnvs,
     cookieJarEntries,
     inheritedPreRequestScripts
   ).then(async (preRequestScriptResult) => {
@@ -870,20 +883,28 @@ export async function runTestRunnerRequest(
       preRequestScriptResult.right.updatedRequest
     )
 
+    // Combine all environment variables including iteration data for effective request resolution
+    // The iteration data is already in updatedEnvs.temp that was passed to pre-request script
+    const allEnvVariables = filterNonEmptyEnvironmentVariables(
+      combineEnvVariables({
+        environments: {
+          global: preRequestScriptResult.right.updatedEnvs.global,
+          selected: preRequestScriptResult.right.updatedEnvs.selected,
+          temp: [
+            ...preRequestScriptResult.right.updatedEnvs.temp, // Use updated temp variables from pre-request script
+            ...(!persistEnv ? getTemporaryVariables() : []), // Add temporary variables if not persisting
+          ],
+        },
+        requestVariables: finalRequestVariables,
+        collectionVariables: inheritedVariables,
+      })
+    )
+
     const effectiveRequest = await getEffectiveRESTRequest(finalRequest, {
       id: "env-id",
       v: 2,
       name: "Env",
-      variables: filterNonEmptyEnvironmentVariables(
-        combineEnvVariables({
-          environments: {
-            ...preRequestScriptResult.right.updatedEnvs,
-            temp: !persistEnv ? getTemporaryVariables() : [],
-          },
-          requestVariables: finalRequestVariables,
-          collectionVariables: inheritedVariables,
-        })
-      ),
+      variables: allEnvVariables,
     })
 
     const [stream] = createRESTNetworkRequestStream(effectiveRequest)
