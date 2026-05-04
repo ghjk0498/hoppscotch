@@ -37,6 +37,64 @@
                   {{ t("collection_runner.negative_delay") }}
                 </p>
               </div>
+
+              <div class="mt-4">
+                <HoppSmartInput
+                  v-model="config.iterations as any"
+                  type="number"
+                  :label="t('collection_runner.iterations')"
+                  :class="{ 'border-red-500': config.iterations < 1 }"
+                  input-styles="floating-input"
+                />
+                <p
+                  v-if="config.iterations < 1"
+                  class="text-xs text-red-500 mt-1"
+                >
+                  {{ t("collection_runner.negative_iterations") }}
+                </p>
+              </div>
+            </section>
+
+            <section class="mt-6">
+              <h4 class="font-semibold text-secondaryDark">
+                {{ t("collection_runner.select_data_file") }}
+              </h4>
+              <div class="flex flex-col gap-4 mt-4 items-start">
+                <div
+                  v-if="dataFileName"
+                  class="flex items-center gap-2 p-2 border border-divider rounded bg-primaryLight"
+                >
+                  <span class="text-secondaryDark font-medium px-2">
+                    {{
+                      t("collection_runner.data_file_selected", {
+                        filename: dataFileName,
+                      })
+                    }}
+                  </span>
+                  <HoppButtonSecondary
+                    v-tippy="{ theme: 'tooltip' }"
+                    :icon="IconTrash"
+                    :title="t('collection_runner.remove_data_file')"
+                    @click="removeDataFile"
+                  />
+                </div>
+                <div v-else>
+                  <input
+                    ref="fileInput"
+                    type="file"
+                    accept=".csv,.json"
+                    class="hidden"
+                    @change="onFileSelected"
+                  />
+                  <HoppButtonSecondary
+                    :icon="IconUpload"
+                    :label="t('collection_runner.upload_data_file')"
+                    outline
+                    filled
+                    @click="fileInput?.click()"
+                  />
+                </div>
+              </div>
             </section>
 
             <section class="mt-6">
@@ -184,6 +242,8 @@ import IconCheck from "~icons/lucide/check"
 import IconCopy from "~icons/lucide/copy"
 import IconHelpCircle from "~icons/lucide/help-circle"
 import IconPlay from "~icons/lucide/play"
+import IconUpload from "~icons/lucide/upload"
+import IconTrash from "~icons/lucide/trash"
 import { CurrentEnv } from "./Env.vue"
 import { pipe } from "fp-ts/lib/function"
 import {
@@ -191,17 +251,21 @@ import {
   teamCollToHoppRESTColl,
 } from "~/helpers/backend/helpers"
 import * as TE from "fp-ts/TaskEither"
+import * as E from "fp-ts/Either"
 import { GQLError } from "~/helpers/backend/GQLClient"
 import { cloneDeep } from "lodash-es"
 import { getErrorMessage } from "~/helpers/runner/collection-tree"
 import { getRESTCollectionByRefId } from "~/newstore/collections"
 import { HoppInheritedProperty } from "~/helpers/types/HoppInheritedProperties"
+import { parseCSV, parseJSON } from "~/helpers/import-export/dataset/parser"
 
 const t = useI18n()
 const toast = useToast()
 const tabs = useService(RESTTabService)
 
 const loadingCollection = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+const dataFileName = ref<string | null>(null)
 
 export type CollectionRunnerData =
   | {
@@ -391,6 +455,42 @@ const CLICommand = computed(() => {
 
 const toggleIncludeEnvironment = () => {
   includeEnvironmentID.value = !includeEnvironmentID.value
+}
+
+const onFileSelected = async (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  const content = await file.text()
+  let result
+
+  if (file.name.endsWith(".csv")) {
+    result = parseCSV(content)
+  } else if (file.name.endsWith(".json")) {
+    result = parseJSON(content)
+  } else {
+    toast.error(t("collection_runner.invalid_data_file_format"))
+    return
+  }
+
+  if (E.isLeft(result)) {
+    toast.error(t("collection_runner.invalid_data_file_format"))
+  } else {
+    config.value.dataset = {
+      data: result.right,
+      headers: result.right.length > 0 ? Object.keys(result.right[0]) : [],
+    }
+    dataFileName.value = file.name
+    if (result.right.length > 0) {
+      config.value.iterations = result.right.length
+    }
+  }
+}
+
+const removeDataFile = () => {
+  config.value.dataset = { data: [], headers: [] }
+  dataFileName.value = null
+  if (fileInput.value) fileInput.value.value = ""
 }
 
 const copyCLICommandToClipboard = () => {
