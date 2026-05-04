@@ -50,14 +50,13 @@ function delay(timeMS: number) {
 export class TestRunnerService extends Service {
   public static readonly ID = "TEST_RUNNER_SERVICE"
 
-  public runTests(
+  public async runTests(
     tab: Ref<HoppTab<HoppTestRunnerDocument>>,
     collection: HoppCollection,
     options: TestRunnerOptions,
     ancestorPreRequestScripts: string[] = [],
     ancestorTestScripts: string[] = []
   ) {
-    // Reset the result collection
     tab.value.document.status = "running"
     tab.value.document.resultCollection = {
       v: collection.v,
@@ -73,35 +72,46 @@ export class TestRunnerService extends Service {
       testScript: collection.testScript ?? "",
     }
 
-    this.runTestCollection(
-      tab,
-      collection,
-      options,
-      [],
-      undefined,
-      undefined,
-      [],
-      undefined,
-      ancestorPreRequestScripts,
-      ancestorTestScripts
-    )
-      .then(() => {
+    const iterations = options.iterations || 1
+    const dataset = options.dataset?.data || []
+
+    try {
+      for (let i = 0; i < iterations; i++) {
+        if (options.stopRef?.value) break
+
+        const iterationData =
+          dataset.length > 0 ? dataset[i % dataset.length] : undefined
+
+        await this.runTestCollection(
+          tab,
+          collection,
+          options,
+          [],
+          undefined,
+          undefined,
+          [],
+          undefined,
+          ancestorPreRequestScripts,
+          ancestorTestScripts,
+          iterationData
+        )
+      }
+      tab.value.document.status = "stopped"
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "Test execution stopped"
+      ) {
         tab.value.document.status = "stopped"
-      })
-      .catch((error) => {
-        if (
-          error instanceof Error &&
-          error.message === "Test execution stopped"
-        ) {
-          tab.value.document.status = "stopped"
-        } else {
-          tab.value.document.status = "error"
-          console.error("Test runner failed:", error)
-        }
-      })
-      .finally(() => {
+      } else {
+        tab.value.document.status = "error"
+        console.error("Test runner failed:", error)
+      }
+    } finally {
+      if (tab.value.document.status === "running") {
         tab.value.document.status = "stopped"
-      })
+      }
+    }
   }
 
   private async runTestCollection(
@@ -114,7 +124,8 @@ export class TestRunnerService extends Service {
     parentVariables: HoppCollection["variables"] = [],
     parentID?: string,
     parentPreRequestScripts: string[] = [],
-    parentTestScripts: string[] = []
+    parentTestScripts: string[] = [],
+    iterationData?: Record<string, any>
   ) {
     try {
       // Compute inherited auth and headers for this collection
@@ -183,7 +194,8 @@ export class TestRunnerService extends Service {
           inheritedVariables,
           collection._ref_id || collection.id,
           inheritedPreRequestScripts,
-          inheritedTestScripts
+          inheritedTestScripts,
+          iterationData
         )
       }
 
@@ -222,7 +234,8 @@ export class TestRunnerService extends Service {
           currentPath,
           inheritedVariables,
           inheritedPreRequestScripts,
-          inheritedTestScripts
+          inheritedTestScripts,
+          iterationData
         )
 
         if (options.delay && options.delay > 0) {
@@ -315,7 +328,8 @@ export class TestRunnerService extends Service {
     path: number[],
     inheritedVariables: HoppCollectionVariable[] = [],
     inheritedPreRequestScripts: string[] = [],
-    inheritedTestScripts: string[] = []
+    inheritedTestScripts: string[] = [],
+    iterationData?: Record<string, any>
   ) {
     if (options.stopRef?.value) {
       throw new Error("Test execution stopped")
@@ -343,7 +357,8 @@ export class TestRunnerService extends Service {
         inheritedVariables,
         initialEnvironmentState,
         inheritedPreRequestScripts,
-        inheritedTestScripts
+        inheritedTestScripts,
+        iterationData
       )
 
       if (options.stopRef?.value) {

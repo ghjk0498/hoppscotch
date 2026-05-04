@@ -816,7 +816,8 @@ export async function runTestRunnerRequest(
   inheritedVariables: HoppCollectionVariable[] = [],
   initialEnvironmentState: InitialEnvironmentState,
   inheritedPreRequestScripts: string[] = [],
-  inheritedTestScripts: string[] = []
+  inheritedTestScripts: string[] = [],
+  iterationData?: Record<string, any>
 ): Promise<
   | E.Left<"script_fail">
   | E.Right<{
@@ -837,6 +838,15 @@ export async function runTestRunnerRequest(
     initialEnvs,
     initialEnvsForComparison,
   } = initialEnvironmentState
+
+  if (iterationData) {
+    const tempVars = Object.entries(iterationData).map(([key, value]) => ({
+      key,
+      value: String(value),
+    }))
+
+    initialEnvs.temp = [...initialEnvs.temp, ...tempVars]
+  }
 
   // Wait for browser to paint the loading state (Send -> Cancel button)
   // Adds ~32ms latency but ensures immediate visual feedback
