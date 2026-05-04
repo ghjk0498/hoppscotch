@@ -45,7 +45,7 @@
                 </p>
 
                 <p
-                  v-if="datasetEnabled && datasetRowCount > 0"
+                  v-if="dataset.enabled && datasetRowCount > 0"
                   class="text-xs text-secondaryLight"
                 >
                   <span v-if="config.iterations <= datasetRowCount">
@@ -68,95 +68,10 @@
                   </span>
                 </p>
 
-                <!-- Data Feed Section (Postman Style) -->
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between">
-                    <label class="text-sm font-medium text-secondaryDark">
-                      {{ t("collection_runner.data_feed") }}
-                    </label>
-                  </div>
-
-                  <div v-if="!datasetEnabled" class="space-y-2">
-                    <div class="flex gap-2">
-                      <label
-                        class="flex items-center justify-center px-4 py-2 text-sm border rounded cursor-pointer border-divider hover:bg-primaryLight transition"
-                      >
-                        <input
-                          ref="csvFileInput"
-                          type="file"
-                          accept=".csv"
-                          class="hidden"
-                          @change="handleFileUpload($event, 'csv')"
-                        />
-                        <span>{{ t("collection_runner.select_csv") }}</span>
-                      </label>
-
-                      <label
-                        class="flex items-center justify-center px-4 py-2 text-sm border rounded cursor-pointer border-divider hover:bg-primaryLight transition"
-                      >
-                        <input
-                          ref="jsonFileInput"
-                          type="file"
-                          accept=".json"
-                          class="hidden"
-                          @change="handleFileUpload($event, 'json')"
-                        />
-                        <span>{{ t("collection_runner.select_json") }}</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div
-                    v-else
-                    class="p-3 border rounded bg-primaryLight border-divider space-y-2"
-                  >
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2 text-sm">
-                        <span class="font-medium text-secondaryDark">{{
-                          datasetFileName
-                        }}</span>
-                        <span class="text-secondaryLight">•</span>
-                        <span class="text-secondaryLight">{{
-                          datasetSource?.toUpperCase()
-                        }}</span>
-                        <span class="text-secondaryLight">•</span>
-                        <span class="text-accent"
-                          >{{ datasetRowCount }}
-                          {{
-                            datasetRowCount === 1
-                              ? t("collection_runner.row")
-                              : t("collection_runner.rows")
-                          }}</span
-                        >
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <HoppButtonSecondary
-                          v-tippy="{ theme: 'tooltip' }"
-                          :title="t('collection_runner.preview_data')"
-                          :icon="IconEye"
-                          class="!py-1 !px-2"
-                          outline
-                          @click="showPreviewModal = true"
-                        />
-                        <HoppButtonSecondary
-                          v-tippy="{ theme: 'tooltip' }"
-                          :title="t('action.remove')"
-                          :icon="IconTrash"
-                          class="!py-1 !px-2"
-                          outline
-                          @click="clearDataset"
-                        />
-                      </div>
-                    </div>
-                    <p class="text-xs text-accent">
-                      {{
-                        t("collection_runner.iterations_from_data", {
-                          count: datasetRowCount,
-                        })
-                      }}
-                    </p>
-                  </div>
-                </div>
+                <HttpTestRunnerDatasetSection
+                  v-model="dataset"
+                  @dataset-loaded="onDatasetLoaded"
+                />
 
                 <!-- Delay Input -->
                 <HoppSmartInput
@@ -309,63 +224,6 @@
       </div>
     </template>
   </HoppSmartModal>
-
-  <!-- Data Preview Modal -->
-  <HoppSmartModal
-    v-if="showPreviewModal"
-    dialog
-    :title="t('collection_runner.data_preview')"
-    @close="showPreviewModal = false"
-  >
-    <template #body>
-      <div class="flex flex-col gap-4 p-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2 text-sm">
-            <span class="font-medium text-secondaryDark">{{
-              datasetFileName
-            }}</span>
-            <span class="text-secondaryLight">•</span>
-            <span class="text-secondaryLight">{{
-              datasetSource?.toUpperCase()
-            }}</span>
-            <span class="text-secondaryLight">•</span>
-            <span class="text-accent"
-              >{{ datasetRowCount }}
-              {{
-                datasetRowCount === 1
-                  ? t("collection_runner.row")
-                  : t("collection_runner.rows")
-              }}</span
-            >
-          </div>
-          <HoppButtonSecondary
-            v-tippy="{ theme: 'tooltip' }"
-            :title="t('action.download_file')"
-            :icon="IconDownload"
-            outline
-            @click="downloadDataset"
-          />
-        </div>
-
-        <div class="border rounded bg-primaryLight border-divider">
-          <div class="overflow-auto max-h-96 p-4">
-            <pre
-              class="text-xs"
-            ><code>{{ JSON.stringify(datasetData, null, 2) }}</code></pre>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <template #footer>
-      <HoppButtonSecondary
-        :label="t('action.close')"
-        outline
-        filled
-        @click="showPreviewModal = false"
-      />
-    </template>
-  </HoppSmartModal>
 </template>
 
 <script setup lang="ts">
@@ -379,20 +237,10 @@ import { useToast } from "~/composables/toast"
 import { TestRunnerConfig } from "~/helpers/rest/document"
 import { copyToClipboard } from "~/helpers/utils/clipboard"
 import { RESTTabService } from "~/services/tab/rest"
-import {
-  isDatasetSizeValid,
-  MAX_DATASET_SIZE_MB,
-  parseCSV,
-  parseJSON,
-  validateDataset,
-} from "~/helpers/import-export/dataset/parser"
 import IconCheck from "~icons/lucide/check"
 import IconCopy from "~icons/lucide/copy"
 import IconHelpCircle from "~icons/lucide/help-circle"
 import IconPlay from "~icons/lucide/play"
-import IconDownload from "~icons/lucide/download"
-import IconEye from "~icons/lucide/eye"
-import IconTrash from "~icons/lucide/trash-2"
 import { CurrentEnv } from "./Env.vue"
 import { pipe } from "fp-ts/lib/function"
 import {
@@ -442,87 +290,21 @@ const environmentID = ref("")
 const currentEnv = ref<CurrentEnv>(null)
 
 // Dataset State
-const datasetEnabled = ref(false)
-const datasetData = ref<Array<Record<string, any>>>([])
-const datasetSource = ref<"json" | "csv" | null>(null)
-const datasetFileName = ref("")
-const datasetRawContent = ref("")
-const datasetRowCount = computed(() => datasetData.value.length)
-const showPreviewModal = ref(false)
+const dataset = ref<any>({
+  enabled: false,
+  data: [],
+  source: null,
+  fileName: "",
+  rawContent: "",
+})
 
-const handleFileUpload = async (event: Event, type: "json" | "csv") => {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
+const datasetRowCount = computed(() => dataset.value.data.length)
 
-  if (!isDatasetSizeValid(file.size)) {
-    toast.error(
-      t("collection_runner.dataset_too_large", { size: MAX_DATASET_SIZE_MB })
-    )
-    ;(event.target as HTMLInputElement).value = ""
-    return
+const onDatasetLoaded = (rowCount: number) => {
+  // Automatically set iterations to row count if iterations = 1
+  if (config.value.iterations === 1) {
+    config.value.iterations = rowCount
   }
-
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    try {
-      const content = e.target?.result as string
-      let parsedData: Array<Record<string, any>> = []
-
-      if (type === "csv") {
-        parsedData = parseCSV(content)
-      } else if (type === "json") {
-        parsedData = parseJSON(content)
-      }
-
-      if (validateDataset(parsedData)) {
-        datasetData.value = parsedData
-        datasetSource.value = type
-        datasetFileName.value = file.name
-        datasetRawContent.value = content
-        datasetEnabled.value = true
-
-        // Automatically set iterations to row count if iterations = 1
-        if (config.value.iterations === 1) {
-          config.value.iterations = parsedData.length
-        }
-
-        toast.success(t("collection_runner.dataset_loaded"))
-      } else {
-        throw new Error("Invalid dataset structure")
-      }
-    } catch (error: any) {
-      toast.error(error.message || t(`collection_runner.invalid_${type}`))
-      clearDataset()
-    }
-    // Reset file input
-    ;(event.target as HTMLInputElement).value = ""
-  }
-  reader.readAsText(file)
-}
-
-const clearDataset = () => {
-  datasetEnabled.value = false
-  datasetData.value = []
-  datasetSource.value = null
-  datasetFileName.value = ""
-  datasetRawContent.value = ""
-}
-
-const downloadDataset = () => {
-  if (!datasetEnabled.value || !datasetSource.value || !datasetRawContent.value)
-    return
-
-  const blob = new Blob([datasetRawContent.value], {
-    type: datasetSource.value === "csv" ? "text/csv" : "application/json",
-  })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = datasetFileName.value
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }
 
 const runnerLink = computed(() => {
@@ -573,18 +355,8 @@ const runTests = async () => {
 
   // Inject dataset configuration
   const runConfig = cloneDeep(config.value)
-  if (
-    datasetEnabled.value &&
-    datasetData.value.length > 0 &&
-    datasetSource.value
-  ) {
-    runConfig.dataset = {
-      enabled: datasetEnabled.value,
-      data: datasetData.value,
-      source: datasetSource.value,
-      fileName: datasetFileName.value,
-      rawContent: datasetRawContent.value,
-    }
+  if (dataset.value.enabled && dataset.value.data.length > 0) {
+    runConfig.dataset = cloneDeep(dataset.value)
   }
 
   tabs.createNewTab({
