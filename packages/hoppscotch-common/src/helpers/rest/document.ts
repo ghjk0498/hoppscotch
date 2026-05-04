@@ -101,6 +101,10 @@ export type TestRunnerConfig = {
   stopOnError: boolean
   persistResponses: boolean
   keepVariableValues: boolean
+  dataset: {
+    data: Record<string, any>[]
+    headers: string[]
+  }
 }
 
 export type HoppTestRunnerDocument = {

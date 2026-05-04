@@ -578,6 +578,12 @@ export const REST_TAB_STATE_SCHEMA = z
               keepVariableValues: z.boolean(),
               persistResponses: z.boolean(),
               stopOnError: z.boolean(),
+              dataset: z
+                .object({
+                  data: z.array(z.record(z.any())),
+                  headers: z.array(z.string()),
+                })
+                .catch({ data: [], headers: [] }),
             }),
             status: z.enum(["idle", "running", "stopped", "error"]),
             collection: HoppRESTCollectionSchema,

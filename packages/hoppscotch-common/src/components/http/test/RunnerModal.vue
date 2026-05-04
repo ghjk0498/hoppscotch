@@ -251,6 +251,10 @@ const config = ref<TestRunnerConfig>({
   stopOnError: false,
   persistResponses: true,
   keepVariableValues: true,
+  dataset: {
+    data: [],
+    headers: [],
+  },
 })
 
 onMounted(() => {
