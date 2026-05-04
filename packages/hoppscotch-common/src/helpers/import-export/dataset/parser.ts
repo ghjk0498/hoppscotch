@@ -4,6 +4,17 @@
 import { Environment } from "@hoppscotch/data"
 import Papa from "papaparse"
 
+export const MAX_DATASET_SIZE_MB = 5
+
+/**
+ * Validates if the dataset file size is within limits.
+ * @param fileSize File size in bytes
+ * @returns true if valid
+ */
+export const isDatasetSizeValid = (fileSize: number): boolean => {
+  return fileSize <= MAX_DATASET_SIZE_MB * 1024 * 1024
+}
+
 /**
  * Transforms iteration data into environment variables.
  * @param iterationData The iteration data to transform
