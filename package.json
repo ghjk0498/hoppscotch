@@ -18,7 +18,10 @@
     "lintfix": "pnpm -r do-lintfix",
     "pre-commit": "pnpm -r do-lint && pnpm -r do-typecheck",
     "test": "pnpm -r do-test",
-    "generate-ui": "pnpm -r do-build-ui"
+    "generate-ui": "pnpm -r do-build-ui",
+    "desktop:prepare": "pnpm --filter @hoppscotch/selfhost-web generate && cargo run --release --manifest-path packages/hoppscotch-desktop/crates/webapp-bundler/Cargo.toml -- --input packages/hoppscotch-selfhost-web/dist --output packages/hoppscotch-desktop/bundle.zip --manifest packages/hoppscotch-desktop/manifest.json",
+    "desktop:dev": "pnpm --filter hoppscotch-desktop dev:full",
+    "desktop:build": "pnpm run desktop:prepare && pnpm --filter hoppscotch-desktop build:full"
   },
   "workspaces": [
     "./packages/*"

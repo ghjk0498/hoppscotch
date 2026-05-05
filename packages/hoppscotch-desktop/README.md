@@ -70,43 +70,34 @@ To connect to your self-hosted (community or enterprise) instance:
 > 
 > Once the container is live, you can enter `[your-ip]:3200` or simply the base address of the instance if you are using [subpath access](https://docs.hoppscotch.io/guides/articles/self-host-hoppscotch-on-your-own-servers#4-subpath-access). 
 
-## Building and Self-Hosting Hoppscotch Desktop
+## Building and Developing Hoppscotch Desktop
 
-You can also build Hoppscotch Desktop locally to self-host with on-prem infra:
+To build or develop the Hoppscotch Desktop app after modifying the UI, use the following commands from the **root directory** of the project.
 
-1. Install and generate the selfhost web app:
-   ```bash
-   cd ../hoppscotch-selfhost-web
-   pnpm install
-   pnpm generate
-   ```
-2. Build the `webapp-bundler`:
-   ```bash
-   cd crates/webapp-bundler
-   cargo build --release
-   ```
-3. Bundle the web app:
-   ```bash
-   cd target/release
-   ./webapp-bundler --input [path-to-dist-directory] --output [path-to-hoppscotch-desktop]/bundle.zip --manifest [path-to-hoppscotch-desktop]/manifest.json
-   ```
-4. Run the development server:
-   ```bash
-   cd hoppscotch-desktop
-   pnpm tauri dev
-   ```
-   or the following for production build:
-   ```bash
-   cd src-tauri
-   pnpm tauri dev
-   ```
+### 1. Prepare Web Assets (UI Updates)
+If you have modified any UI components (in `hoppscotch-common` or `hoppscotch-selfhost-web`), you must first bundle them for the desktop app:
+```bash
+pnpm desktop:prepare
+```
+This command builds the web app and creates a `bundle.zip` which the desktop shell uses.
 
-> [!Note]
-> `[path-to-dist-directory]` should point to the `dist` directory created by the `pnpm generate` command in step 1.
+### 2. Development Mode
+To run the desktop app in development mode with hot-reloading for the desktop shell:
+```bash
+pnpm desktop:dev
+```
 
-## Minimum System Requirements
+### 3. Production Build
+To create a final production-ready installer (including all UI updates):
+```bash
+pnpm desktop:build
+```
 
-### Windows
+---
+
+### Sources & Licensing
+The following sources are referenced for technical requirements and compliance:
+
 - **OS Version**: Windows 10 1803+ or Windows 11
 - **Architecture**: x64
 
