@@ -73,12 +73,65 @@
                   </span>
                   <HoppButtonSecondary
                     v-tippy="{ theme: 'tooltip' }"
+                    :icon="IconEye"
+                    :title="t('collection_runner.data_preview')"
+                    @click="showPreview = !showPreview"
+                  />
+                  <HoppButtonSecondary
+                    v-tippy="{ theme: 'tooltip' }"
                     :icon="IconTrash"
                     :title="t('collection_runner.remove_data_file')"
                     @click="removeDataFile"
                   />
                 </div>
-                <div v-else>
+                <div
+                  v-if="showPreview && config.dataset.data.length > 0"
+                  class="w-full mt-2 overflow-auto border rounded border-divider bg-primary"
+                  style="max-height: 240px"
+                >
+                  <table class="w-full text-left border-collapse min-w-max">
+                    <thead
+                      class="sticky top-0 z-10 border-b bg-primaryLight border-divider"
+                    >
+                      <tr>
+                        <th
+                          v-for="header in config.dataset.headers"
+                          :key="header"
+                          class="px-4 py-2 font-semibold text-secondaryDark"
+                        >
+                          {{ header }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="(row, index) in config.dataset.data.slice(0, 10)"
+                        :key="index"
+                        class="border-b border-divider last:border-b-0"
+                      >
+                        <td
+                          v-for="header in config.dataset.headers"
+                          :key="header"
+                          class="px-4 py-2 text-secondaryLight"
+                        >
+                          {{ row[header] }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div
+                    v-if="config.dataset.data.length > 10"
+                    class="p-2 text-xs text-center border-t border-divider text-secondaryLight bg-primaryLight"
+                  >
+                    {{
+                      t("collection_runner.showing_first_n_rows", {
+                        count: 10,
+                        total: config.dataset.data.length,
+                      })
+                    }}
+                  </div>
+                </div>
+                <div v-else-if="!dataFileName">
                   <input
                     ref="fileInput"
                     type="file"
@@ -244,6 +297,7 @@ import IconHelpCircle from "~icons/lucide/help-circle"
 import IconPlay from "~icons/lucide/play"
 import IconUpload from "~icons/lucide/upload"
 import IconTrash from "~icons/lucide/trash"
+import IconEye from "~icons/lucide/eye"
 import { CurrentEnv } from "./Env.vue"
 import { pipe } from "fp-ts/lib/function"
 import {
@@ -266,6 +320,7 @@ const tabs = useService(RESTTabService)
 const loadingCollection = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const dataFileName = ref<string | null>(null)
+const showPreview = ref(false)
 
 export type CollectionRunnerData =
   | {
@@ -490,6 +545,7 @@ const onFileSelected = async (event: Event) => {
 const removeDataFile = () => {
   config.value.dataset = { data: [], headers: [] }
   dataFileName.value = null
+  showPreview.value = false
   if (fileInput.value) fileInput.value.value = ""
 }
 

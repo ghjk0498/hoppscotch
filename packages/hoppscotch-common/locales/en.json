@@ -1987,7 +1987,8 @@
     "cli_command_generation_description_sh_with_server_url_placeholder": "Copy the below command and run it from the CLI. Please specify a personal access token and the SH instance server URL.",
     "run_collection": "Run collection",
     "no_passed_tests": "No tests passed",
-    "no_failed_tests": "No tests failed"
+    "no_failed_tests": "No tests failed",
+    "showing_first_n_rows": "Showing first {count} rows out of {total}"
   },
   "ai_experiments": {
     "generate_request_name": "Generate Request Name Using AI",
