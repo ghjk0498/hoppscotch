@@ -180,9 +180,10 @@ export const getTestableBody = (
  * Combines the environment variables from the request and the selected, global, and temporary environments.
  * The priority is as follows:
  * 1. Request variables
- * 2. Temporary variables (if any)
- * 3. Selected environment variables
- * 4. Global environment variables
+ * 2. Collection variables
+ * 3. Temporary variables (if any)
+ * 4. Selected environment variables
+ * 5. Global environment variables
  * @param variables The environment variables to combine
  * @returns The combined environment variables
  */
@@ -843,6 +844,9 @@ export async function runTestRunnerRequest(
     const tempVars = Object.entries(iterationData).map(([key, value]) => ({
       key,
       value: String(value),
+      initialValue: String(value),
+      currentValue: String(value),
+      secret: false,
     }))
 
     initialEnvs.temp = [...initialEnvs.temp, ...tempVars]
@@ -884,16 +888,18 @@ export async function runTestRunnerRequest(
       id: "env-id",
       v: 2,
       name: "Env",
-      variables: filterNonEmptyEnvironmentVariables(
-        combineEnvVariables({
+      variables: filterNonEmptyEnvironmentVariables([
+        ...(initialEnvs.temp || []),
+        ...(!persistEnv ? getTemporaryVariables() : []),
+        ...combineEnvVariables({
           environments: {
             ...preRequestScriptResult.right.updatedEnvs,
-            temp: !persistEnv ? getTemporaryVariables() : [],
+            temp: [],
           },
           requestVariables: finalRequestVariables,
           collectionVariables: inheritedVariables,
-        })
-      ),
+        }),
+      ]),
     })
 
     const [stream] = createRESTNetworkRequestStream(effectiveRequest)

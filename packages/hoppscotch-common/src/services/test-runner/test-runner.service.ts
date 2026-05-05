@@ -82,11 +82,26 @@ export class TestRunnerService extends Service {
         const iterationData =
           dataset.length > 0 ? dataset[i % dataset.length] : undefined
 
+        const parentPath = iterations > 1 ? [i] : []
+
+        if (iterations > 1) {
+          tab.value.document.resultCollection!.folders.push({
+            v: collection.v,
+            id: `${collection.id}-iter-${i}`,
+            name: `Iteration ${i + 1}`,
+            folders: [],
+            requests: [],
+            auth: { authType: "inherit", authActive: true },
+            headers: [],
+            variables: [],
+          })
+        }
+
         await this.runTestCollection(
           tab,
           collection,
           options,
-          [],
+          parentPath,
           undefined,
           undefined,
           [],
