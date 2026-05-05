@@ -92,6 +92,8 @@ To create a final production-ready installer (including all UI updates):
 ```bash
 pnpm desktop:build
 ```
+The generated installer (`.exe`) will be located at:
+`packages/hoppscotch-desktop/src-tauri/target/release/bundle/nsis/Hoppscotch_26.4.0_x64-setup.exe`
 
 ---
 
