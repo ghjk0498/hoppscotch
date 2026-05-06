@@ -1,6 +1,6 @@
 <template>
   <HoppSmartTabs
-    v-if="doc.response"
+    v-if="doc.response || (isTestRunner && requestDetails)"
     v-model="selectedLensTab"
     styles="sticky overflow-x-auto flex-shrink-0 z-10 bg-primary top-lowerPrimaryStickyFold"
   >
@@ -84,6 +84,7 @@ import {
   Lens,
 } from "~/helpers/lenses/lenses"
 import { HoppRequestDocument } from "~/helpers/rest/document"
+import HttpTestRequestDetails from "../http/test/RequestDetails.vue"
 import { ConsoleEntry } from "../console/Panel.vue"
 
 const props = defineProps<{

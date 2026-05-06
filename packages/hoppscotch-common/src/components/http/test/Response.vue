@@ -16,7 +16,7 @@
       :is-loading="loading"
     />
     <LensesResponseBodyRenderer
-      v-if="!loading && hasResponse"
+      v-if="!loading"
       :document="{
         request: {
           ...doc,
@@ -61,13 +61,6 @@ const emit = defineEmits<{
 }>()
 
 const doc = useVModel(props, "document", emit)
-
-const hasResponse = computed(
-  () =>
-    doc.value.response?.type === "success" ||
-    doc.value.response?.type === "fail" ||
-    doc.value.response?.type === "network_fail"
-)
 
 const loading = computed(
   // Check both response type AND testResults to ensure we stay in loading state

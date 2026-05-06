@@ -116,6 +116,7 @@
 import { HoppRESTRequest } from "@hoppscotch/data"
 import { computed } from "vue"
 import { useI18n } from "~/composables/i18n"
+import LensesHeadersRenderer from "~/components/lenses/HeadersRenderer.vue"
 import { formatJSON, parseFormData } from "~/helpers/test/RequestDetailsHelper"
 
 const t = useI18n()
