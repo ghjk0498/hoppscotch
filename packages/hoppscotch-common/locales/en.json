@@ -1800,6 +1800,7 @@
     "history": "History",
     "mqtt": "MQTT",
     "parameters": "Parameters",
+    "request": "Request",
     "post_request_script": "Post-request Script",
     "pre_request_script": "Pre-request Script",
     "scripts": "Scripts",

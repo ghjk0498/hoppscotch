@@ -950,6 +950,7 @@
     "history": "이력",
     "mqtt": "MQTT",
     "parameters": "파라미터",
+    "request": "요청",
     "pre_request_script": "사전 요청 스크립트",
     "queries": "쿼리",
     "query": "쿼리",

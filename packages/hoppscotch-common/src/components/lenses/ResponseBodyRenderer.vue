@@ -43,7 +43,15 @@
       />
     </HoppSmartTab>
     <HoppSmartTab
-      v-if="requestHeaders"
+      v-if="requestDetails"
+      id="request"
+      :label="t('tab.request')"
+      class="flex flex-1 flex-col"
+    >
+      <HttpTestRequestDetails :request="requestDetails" />
+    </HoppSmartTab>
+    <HoppSmartTab
+      v-if="!isTestRunner && requestHeaders"
       id="req-headers"
       :label="t('response.request_headers')"
       :info="`${requestHeaders?.length}`"
@@ -147,6 +155,13 @@ const requestHeaders = computed(() => {
   return doc.value.response?.req.headers || doc.value.request.headers
 })
 
+const requestDetails = computed(() => {
+  if (!props.isTestRunner) return null
+  if (doc.value.response && "req" in doc.value.response)
+    return doc.value.response.req
+  return doc.value.request
+})
+
 const validLenses = computed(() => {
   if (!doc.value.response) return []
   return getSuitableLenses(doc.value.response)
@@ -177,7 +192,7 @@ watch(
   validLenses,
   (newLenses: Lens[]) => {
     if (newLenses.length === 0) {
-      selectedLensTab.value = "req-headers"
+      selectedLensTab.value = props.isTestRunner ? "request" : "req-headers"
       return
     }
 
@@ -185,6 +200,7 @@ watch(
       ...newLenses.map((x) => x.renderer),
       "headers",
       "results",
+      "request",
     ]
 
     const { responseTabPreference } = doc.value
