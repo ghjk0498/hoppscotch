@@ -61,18 +61,21 @@
       />
     </template>
     <template #secondary>
+      <HttpTestResponse
+        v-if="
+          selectedRequest &&
+          (selectedRequest.response || selectedRequest.testResults)
+        "
+        v-model:document="selectedRequest"
+        :show-response="tab.document.config.persistResponses"
+      />
       <div
-        v-if="tab.document.status === 'running'"
+        v-else-if="tab.document.status === 'running'"
         class="flex flex-col items-center gap-4 justify-center h-full"
       >
         <HoppSmartSpinner />
         <span> {{ t("collection_runner.running_collection") }}... </span>
       </div>
-      <HttpTestResponse
-        v-else-if="selectedRequest && selectedRequest.response"
-        v-model:document="selectedRequest"
-        :show-response="tab.document.config.persistResponses"
-      />
 
       <HoppSmartPlaceholder
         v-else-if="
