@@ -389,12 +389,20 @@ export class TestRunnerService extends Service {
         tab.value.document.testRunnerMeta.failedTests += failed
 
         // Update request with results and propagate pre-request script changes in the result collection
-        this.updateRequestAtPath(tab.value.document.resultCollection!, path, {
+        // Use response.req as it contains the effective request with resolved variables
+        const requestWithResults = {
           ...updatedRequest,
+          ...response.req,
           testResults: testResult,
           response: options.persistResponses ? response : null,
           isLoading: false,
-        })
+        }
+
+        this.updateRequestAtPath(
+          tab.value.document.resultCollection!,
+          path,
+          requestWithResults
+        )
 
         if (response.type === "success" || response.type === "fail") {
           tab.value.document.testRunnerMeta.totalTime +=
