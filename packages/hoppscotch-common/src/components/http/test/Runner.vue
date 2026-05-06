@@ -68,30 +68,46 @@
         <HoppSmartSpinner />
         <span> {{ t("collection_runner.running_collection") }}... </span>
       </div>
-      <HttpTestResponse
-        v-else-if="selectedRequest && selectedRequest.response"
-        v-model:document="selectedRequest"
-        :show-response="tab.document.config.persistResponses"
-      />
+      <div v-else-if="selectedRequest" class="flex flex-col flex-1 h-full">
+        <HoppSmartTabs
+          v-model="selectedDetailTab"
+          styles="sticky overflow-x-auto flex-shrink-0 z-10 bg-primary top-0"
+        >
+          <HoppSmartTab id="request" :label="t('request.title')">
+            <HttpTestRequestDetails :request="selectedRequest" />
+          </HoppSmartTab>
+          <HoppSmartTab id="response" :label="t('response.title')">
+            <HttpTestResponse
+              v-if="selectedRequest.response"
+              v-model:document="selectedRequest"
+              :show-response="tab.document.config.persistResponses"
+            />
+            <HoppSmartPlaceholder
+              v-else-if="!testRunnerConfig.persistResponses"
+              :src="`/images/states/${colorMode.value}/add_files.svg`"
+              :alt="`${t('collection_runner.no_response_persist')}`"
+              :text="`${t('collection_runner.no_response_persist')}`"
+            >
+              <template #body>
+                <HoppButtonPrimary
+                  :label="t('test.new_run')"
+                  @click="showCollectionsRunnerModal = true"
+                />
+              </template>
+            </HoppSmartPlaceholder>
+            <HoppSmartPlaceholder
+              v-else
+              :src="`/images/states/${colorMode.value}/pack.svg`"
+              :alt="`${t('collection_runner.response_body_lost_rerun')}`"
+              :text="`${t('collection_runner.response_body_lost_rerun')}`"
+            >
+            </HoppSmartPlaceholder>
+          </HoppSmartTab>
+        </HoppSmartTabs>
+      </div>
 
       <HoppSmartPlaceholder
-        v-else-if="
-          !testRunnerConfig.persistResponses && !selectedRequest?.response
-        "
-        :src="`/images/states/${colorMode.value}/add_files.svg`"
-        :alt="`${t('collection_runner.no_response_persist')}`"
-        :text="`${t('collection_runner.no_response_persist')}`"
-      >
-        <template #body>
-          <HoppButtonPrimary
-            :label="t('test.new_run')"
-            @click="showCollectionsRunnerModal = true"
-          />
-        </template>
-      </HoppSmartPlaceholder>
-
-      <HoppSmartPlaceholder
-        v-else-if="!selectedRequest"
+        v-else
         :src="`/images/states/${colorMode.value}/pack.svg`"
         :alt="`${t('collection_runner.response_body_lost_rerun')}`"
         :text="`${t('collection_runner.response_body_lost_rerun')}`"
@@ -405,6 +421,7 @@ const result = computed(() => {
 })
 
 const showTestsType = ref<"all" | "passed" | "failed">("all")
+const selectedDetailTab = ref<"request" | "response">("response")
 
 const collectionAdapter: SmartTreeAdapter<CollectionNode> =
   new TestRunnerCollectionsAdapter(result, showTestsType)
