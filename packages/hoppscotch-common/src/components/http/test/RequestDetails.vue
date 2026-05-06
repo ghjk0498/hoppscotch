@@ -7,6 +7,40 @@
       </div>
     </div>
 
+    <div v-if="queryParams.length > 0" class="flex flex-col">
+      <div
+        class="flex items-center px-4 py-2 font-semibold border-b border-divider text-secondaryDark"
+      >
+        {{ t("tab.parameters") }}
+      </div>
+      <div class="p-4">
+        <table class="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              <th class="py-2 font-semibold text-left text-secondaryDark">
+                {{ t("documentation.key") }}
+              </th>
+              <th class="py-2 font-semibold text-left text-secondaryDark">
+                {{ t("documentation.value") }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(item, index) in queryParams"
+              :key="index"
+              class="border-t border-divider"
+            >
+              <td class="py-2 pr-4 break-all">{{ item.key }}</td>
+              <td class="py-2 text-secondaryLight break-all">
+                {{ item.value }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div v-if="request.headers.length > 0" class="flex flex-col">
       <div
         class="flex items-center px-4 py-2 font-semibold border-b border-divider text-secondaryDark"
@@ -124,6 +158,34 @@ const t = useI18n()
 const props = defineProps<{
   request: HoppRESTRequest
 }>()
+
+const queryParams = computed(() => {
+  try {
+    const url = new URL(props.request.endpoint)
+    const params: { key: string; value: string }[] = []
+    url.searchParams.forEach((value, key) => {
+      params.push({ key, value })
+    })
+    return params
+  } catch (_e) {
+    // 상대 경로이거나 URL 형식이 아닐 경우 쿼리 스트링만 수동 파싱 시도
+    const queryString = props.request.endpoint.split("?")[1]
+    if (!queryString) return []
+
+    const params: { key: string; value: string }[] = []
+    const pairs = queryString.split("&")
+    for (const pair of pairs) {
+      const [key, value] = pair.split("=")
+      if (key) {
+        params.push({
+          key: decodeURIComponent(key),
+          value: value ? decodeURIComponent(value) : "",
+        })
+      }
+    }
+    return params
+  }
+})
 
 const hasBody = computed(() => {
   return (
