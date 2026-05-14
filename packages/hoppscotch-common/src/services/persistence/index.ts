@@ -24,8 +24,6 @@ import {
   SecretVariable,
 } from "../secret-environment.service"
 
-import { useToast } from "~/composables/toast"
-
 import {
   graphqlCollectionStore,
   restCollectionStore,
@@ -160,6 +158,7 @@ const migrations: Migration[] = [
       }
 
       for (const [oldKey, newKey] of Object.entries(keyMappings)) {
+        if (typeof localStorage === "undefined") continue
         const data = localStorage.getItem(oldKey)
         if (data) {
           try {
@@ -255,7 +254,8 @@ export class PersistenceService extends Service {
   public static readonly ID = "PERSISTENCE_SERVICE"
 
   // TODO: Consider swapping this with platform dependent `StoreLike` impl
-  public hoppLocalConfigStorage: StorageLike = localStorage
+  public hoppLocalConfigStorage: StorageLike =
+    typeof localStorage !== "undefined" ? localStorage : ({} as any)
 
   private readonly restTabService = this.bind(RESTTabService)
   private readonly gqlTabService = this.bind(GQLTabService)
@@ -269,11 +269,18 @@ export class PersistenceService extends Service {
     CurrentSortValuesService
   )
 
-  private showErrorToast(key: string) {
-    const toast = useToast()
-    toast.error(
-      `Schema validation failed for ${STORE_NAMESPACE}:${key}. A backup has been created with suffix '-backup'`
-    )
+  private async showErrorToast(key: string) {
+    if (typeof window === "undefined") return
+
+    try {
+      const { useToast } = await import("~/composables/toast")
+      const toast = useToast()
+      toast.error(
+        `Schema validation failed for ${STORE_NAMESPACE}:${key}. A backup has been created with suffix '-backup'`
+      )
+    } catch (e) {
+      console.error("Failed to show error toast:", e)
+    }
   }
 
   async init(): Promise<E.Either<StoreError, void>> {
@@ -334,6 +341,8 @@ export class PersistenceService extends Service {
    * Private method to migrate settings from older versions
    */
   private async checkAndMigrateOldSettings() {
+    if (typeof window === "undefined") return
+
     const oldSelectedEnvIndex = window.localStorage.getItem("selectedEnvIndex")
     if (oldSelectedEnvIndex) {
       if (oldSelectedEnvIndex === "-1") {

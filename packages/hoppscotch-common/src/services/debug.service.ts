@@ -20,6 +20,8 @@ export class DebugService extends Service {
   override onServiceInit() {
     console.debug("DebugService is initialized...")
 
+    if (typeof window === "undefined") return
+
     const container = this.getContainer()
 
     // Log container events

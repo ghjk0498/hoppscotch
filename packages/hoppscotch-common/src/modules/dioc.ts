@@ -6,7 +6,7 @@ import { platform } from "~/platform"
 
 const serviceContainer = new Container()
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== "undefined") {
   serviceContainer.bind(DebugService)
 }
 

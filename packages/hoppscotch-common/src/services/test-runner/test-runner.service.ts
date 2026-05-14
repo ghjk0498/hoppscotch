@@ -1,26 +1,23 @@
-import {
-  HoppCollection,
-  HoppCollectionVariable,
-  HoppRESTHeaders,
-  HoppRESTRequest,
-} from "@hoppscotch/data"
+import { HoppCollection, HoppRESTRequest } from "@hoppscotch/data"
 import { Service } from "dioc"
-import { hasActualScript } from "~/helpers/scripting"
-import * as E from "fp-ts/Either"
 import { cloneDeep } from "lodash-es"
-import { nextTick, Ref } from "vue"
+import { Ref, watch } from "vue"
+import { filter } from "rxjs/operators"
+import RunnerWorker from "../../workers/runner.worker?worker&inline"
 import {
-  captureInitialEnvironmentState,
-  runTestRunnerRequest,
-} from "~/helpers/RequestRunner"
+  RunnerWorkerEvent,
+  RunnerWorkerMessage,
+} from "../../helpers/types/HoppRunnerWorker"
+import { createRESTNetworkRequestStream } from "~/helpers/network"
+import { useSetting } from "~/composables/settings"
+import { captureInitialEnvironmentState } from "~/helpers/RequestRunner"
 import {
   HoppTestRunnerDocument,
   TestRunnerConfig,
 } from "~/helpers/rest/document"
 import { HoppRESTResponse } from "~/helpers/types/HoppRESTResponse"
-import { HoppTestData, HoppTestResult } from "~/helpers/types/HoppTestResult"
+import { HoppTestResult } from "~/helpers/types/HoppTestResult"
 import { HoppTab } from "../tab"
-import { populateValuesInInheritedCollectionVars } from "~/helpers/utils/inheritedCollectionVarTransformer"
 
 export type TestRunnerOptions = {
   stopRef: Ref<boolean>
@@ -37,25 +34,13 @@ export type TestRunnerRequest = HoppRESTRequest & {
   failedTests: number
 }
 
-function delay(timeMS: number) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(resolve, timeMS)
-    return () => {
-      clearTimeout(timeout)
-      reject(new Error("Operation cancelled"))
-    }
-  })
-}
-
 export class TestRunnerService extends Service {
   public static readonly ID = "TEST_RUNNER_SERVICE"
 
   public async runTests(
     tab: Ref<HoppTab<HoppTestRunnerDocument>>,
     collection: HoppCollection,
-    options: TestRunnerOptions,
-    ancestorPreRequestScripts: string[] = [],
-    ancestorTestScripts: string[] = []
+    options: TestRunnerOptions
   ) {
     tab.value.document.status = "running"
     tab.value.document.resultCollection = {
@@ -72,209 +57,146 @@ export class TestRunnerService extends Service {
       testScript: collection.testScript ?? "",
     }
 
-    const iterations = options.iterations || 1
-    const dataset = options.dataset?.data || []
-
-    try {
-      for (let i = 0; i < iterations; i++) {
-        if (options.stopRef?.value) break
-
-        const iterationData =
-          dataset.length > 0 ? dataset[i % dataset.length] : undefined
-
-        const parentPath = iterations > 1 ? [i] : []
-
-        if (iterations > 1) {
-          tab.value.document.resultCollection!.folders.push({
-            v: collection.v,
-            id: `${collection.id}-iter-${i}`,
-            name: `Iteration ${i + 1}`,
-            folders: [],
-            requests: [],
-            auth: { authType: "inherit", authActive: true },
-            headers: [],
-            variables: [],
-          })
-        }
-
-        await this.runTestCollection(
-          tab,
-          collection,
-          options,
-          parentPath,
-          undefined,
-          undefined,
-          [],
-          undefined,
-          ancestorPreRequestScripts,
-          ancestorTestScripts,
-          iterationData
-        )
-      }
-      tab.value.document.status = "stopped"
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === "Test execution stopped"
-      ) {
-        tab.value.document.status = "stopped"
-      } else {
-        tab.value.document.status = "error"
-        console.error("Test runner failed:", error)
-      }
-    } finally {
-      if (tab.value.document.status === "running") {
-        tab.value.document.status = "stopped"
-      }
+    // Reset meta
+    tab.value.document.testRunnerMeta = {
+      totalRequests: this.countRequests(collection) * (options.iterations || 1),
+      completedRequests: 0,
+      totalTests: 0,
+      passedTests: 0,
+      failedTests: 0,
+      totalTime: 0,
     }
-  }
 
-  private async runTestCollection(
-    tab: Ref<HoppTab<HoppTestRunnerDocument>>,
-    collection: HoppCollection,
-    options: TestRunnerOptions,
-    parentPath: number[] = [],
-    parentHeaders?: HoppRESTHeaders,
-    parentAuth?: HoppRESTRequest["auth"],
-    parentVariables: HoppCollection["variables"] = [],
-    parentID?: string,
-    parentPreRequestScripts: string[] = [],
-    parentTestScripts: string[] = [],
-    iterationData?: Record<string, any>
-  ) {
-    try {
-      // Compute inherited auth and headers for this collection
-      const inheritedAuth =
-        collection.auth?.authType === "inherit" && collection.auth.authActive
-          ? parentAuth || { authType: "none", authActive: false }
-          : collection.auth || { authType: "none", authActive: false }
+    const experimentalSandbox = useSetting(
+      "EXPERIMENTAL_SCRIPTING_SANDBOX"
+    ).value
+    const initialEnvironmentState = captureInitialEnvironmentState()
+    const inheritedVariables =
+      tab.value.document.inheritedProperties?.variables ?? []
 
-      const inheritedHeaders: HoppRESTHeaders = [
-        ...(parentHeaders || []),
-        ...collection.headers,
-      ]
+    const worker = new RunnerWorker()
 
-      const inheritedVariables = [
-        ...(populateValuesInInheritedCollectionVars(
-          parentVariables,
-          parentID || collection._ref_id || collection.id
-        ) || []),
-        ...(populateValuesInInheritedCollectionVars(
-          collection.variables,
-          collection._ref_id || collection.id
-        ) || []),
-      ]
+    // UI Update Batching
+    let pendingUpdates: RunnerWorkerEvent[] = []
+    let rafId: number | null = null
 
-      const inheritedPreRequestScripts = [
-        ...parentPreRequestScripts,
-        ...(hasActualScript(collection.preRequestScript)
-          ? [collection.preRequestScript]
-          : []),
-      ]
-      const inheritedTestScripts = [
-        ...parentTestScripts,
-        ...(hasActualScript(collection.testScript)
-          ? [collection.testScript]
-          : []),
-      ]
+    const flushUpdates = () => {
+      if (!tab.value.document.resultCollection) return
 
-      // Process folders progressively
-      for (let i = 0; i < collection.folders.length; i++) {
-        if (options.stopRef?.value) {
-          tab.value.document.status = "stopped"
-          throw new Error("Test execution stopped")
-        }
+      pendingUpdates.forEach((update) => {
+        if (update.type === "FOLDER_ADDED") {
+          this.addFolderToPath(
+            tab.value.document.resultCollection!,
+            update.path,
+            update.folder
+          )
+        } else if (update.type === "REQUEST_ADDED") {
+          this.addRequestToPath(
+            tab.value.document.resultCollection!,
+            update.path,
+            update.request as TestRunnerRequest
+          )
+        } else if (update.type === "REQUEST_UPDATED") {
+          this.updateRequestAtPath(
+            tab.value.document.resultCollection!,
+            update.path,
+            update.updates
+          )
 
-        const folder = collection.folders[i]
-        const currentPath = [...parentPath, i]
-
-        // Add folder to the result collection
-        this.addFolderToPath(
-          tab.value.document.resultCollection!,
-          currentPath,
-          {
-            ...cloneDeep(folder),
-            folders: [],
-            requests: [],
-          }
-        )
-
-        await this.runTestCollection(
-          tab,
-          folder,
-          options,
-          currentPath,
-          inheritedHeaders,
-          inheritedAuth,
-          inheritedVariables,
-          collection._ref_id || collection.id,
-          inheritedPreRequestScripts,
-          inheritedTestScripts,
-          iterationData
-        )
-      }
-
-      // Process requests progressively
-      for (let i = 0; i < collection.requests.length; i++) {
-        if (options.stopRef?.value) {
-          tab.value.document.status = "stopped"
-          throw new Error("Test execution stopped")
-        }
-
-        const request = collection.requests[i] as TestRunnerRequest
-        const currentPath = [...parentPath, i]
-
-        // Add request to the result collection before execution
-        this.addRequestToPath(
-          tab.value.document.resultCollection!,
-          currentPath,
-          cloneDeep(request)
-        )
-
-        // Update the request with inherited headers and auth before execution
-        const finalRequest = {
-          ...request,
-          auth:
-            request.auth.authType === "inherit" && request.auth.authActive
-              ? inheritedAuth
-              : request.auth,
-          headers: [...inheritedHeaders, ...request.headers],
-        }
-
-        await this.runTestRequest(
-          tab,
-          finalRequest,
-          collection,
-          options,
-          currentPath,
-          inheritedVariables,
-          inheritedPreRequestScripts,
-          inheritedTestScripts,
-          iterationData
-        )
-
-        if (options.delay && options.delay > 0) {
-          try {
-            await delay(options.delay)
-          } catch (_error) {
-            if (options.stopRef?.value) {
-              tab.value.document.status = "stopped"
-              throw new Error("Test execution stopped")
-            }
+          const { passedTests, failedTests, responseTime } = update.updates
+          if (passedTests !== undefined) {
+            tab.value.document.testRunnerMeta.totalTests +=
+              passedTests + failedTests
+            tab.value.document.testRunnerMeta.passedTests += passedTests
+            tab.value.document.testRunnerMeta.failedTests += failedTests
+            tab.value.document.testRunnerMeta.totalTime += responseTime || 0
+            tab.value.document.testRunnerMeta.completedRequests += 1
           }
         }
-      }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === "Test execution stopped"
-      ) {
-        throw error
-      }
-      tab.value.document.status = "error"
-      console.error("Collection execution failed:", error)
-      throw error
+      })
+      pendingUpdates = []
+      rafId = null
     }
+
+    const queueUpdate = (update: RunnerWorkerEvent) => {
+      pendingUpdates.push(update)
+      if (!rafId) rafId = requestAnimationFrame(flushUpdates)
+    }
+
+    const stopWatcher = watch(
+      () => options.stopRef.value,
+      (stop) => {
+        if (stop) worker.postMessage({ type: "STOP_RUN" })
+      }
+    )
+
+    return new Promise<void>((resolve, reject) => {
+      worker.onmessage = async (event: MessageEvent<RunnerWorkerEvent>) => {
+        const data = event.data
+
+        switch (data.type) {
+          case "RUN_STARTED":
+            break
+          case "FOLDER_ADDED":
+          case "REQUEST_ADDED":
+          case "REQUEST_UPDATED":
+            queueUpdate(data)
+            break
+          case "EXECUTE_NETWORK_REQUEST": {
+            const [stream] = createRESTNetworkRequestStream(
+              data.effectiveRequest as any
+            )
+            const response = await stream
+              .pipe(
+                filter(
+                  (res) =>
+                    res.type === "success" ||
+                    res.type === "fail" ||
+                    res.type === "network_fail"
+                )
+              )
+              .toPromise()
+            worker.postMessage({
+              type: "NETWORK_RESPONSE",
+              id: data.id,
+              response: response!,
+            })
+            break
+          }
+          case "RUN_COMPLETE":
+            tab.value.document.status = "stopped"
+            worker.terminate()
+            stopWatcher()
+            if (rafId) cancelAnimationFrame(rafId)
+            flushUpdates()
+            resolve()
+            break
+          case "ERROR":
+            tab.value.document.status = "error"
+            worker.terminate()
+            stopWatcher()
+            if (rafId) cancelAnimationFrame(rafId)
+            reject(new Error(data.error))
+            break
+        }
+      }
+
+      worker.postMessage(
+        cloneDeep({
+          type: "START_RUN",
+          collection,
+          initialEnvironmentState,
+          inheritedVariables: inheritedVariables as any,
+          iterations: options.iterations || 1,
+          dataset: options.dataset?.data || [],
+          experimentalSandbox,
+          keepVariableValues: options.keepVariableValues,
+          stopOnError: options.stopOnError,
+          persistResponses: options.persistResponses,
+          delay: options.delay || 0,
+        } as RunnerWorkerMessage)
+      )
+    })
   }
 
   private addFolderToPath(
@@ -335,141 +257,11 @@ export class TestRunnerService extends Service {
     }
   }
 
-  private async runTestRequest(
-    tab: Ref<HoppTab<HoppTestRunnerDocument>>,
-    request: TestRunnerRequest,
-    collection: HoppCollection,
-    options: TestRunnerOptions,
-    path: number[],
-    inheritedVariables: HoppCollectionVariable[] = [],
-    inheritedPreRequestScripts: string[] = [],
-    inheritedTestScripts: string[] = [],
-    iterationData?: Record<string, any>
-  ) {
-    if (options.stopRef?.value) {
-      throw new Error("Test execution stopped")
+  private countRequests(collection: HoppCollection): number {
+    let count = collection.requests.length
+    for (const folder of collection.folders) {
+      count += this.countRequests(folder)
     }
-
-    try {
-      // Update request status in the result collection
-      this.updateRequestAtPath(tab.value.document.resultCollection!, path, {
-        isLoading: true,
-        error: undefined,
-      })
-
-      // Force Vue to flush DOM updates before starting async work.
-      // This ensures components consuming the isLoading state (such as those rendering the Send/Cancel button) update immediately.
-      // Performance impact: nextTick() waits for microtask queue drain (actual latency varies based on pending microtasks)
-      // but is necessary to prevent UI flicker and ensure loading indicators appear before long-running network requests.
-      await nextTick()
-
-      // Capture the initial environment state for a test run so that it remains consistent and unchanged when current environment changes
-      const initialEnvironmentState = captureInitialEnvironmentState()
-
-      const results = await runTestRunnerRequest(
-        request,
-        options.keepVariableValues,
-        inheritedVariables,
-        initialEnvironmentState,
-        inheritedPreRequestScripts,
-        inheritedTestScripts,
-        iterationData
-      )
-
-      if (options.stopRef?.value) {
-        throw new Error("Test execution stopped")
-      }
-
-      if (results && E.isRight(results)) {
-        const { response, testResult, updatedRequest } = results.right
-        const { passed, failed } = this.getTestResultInfo(testResult)
-
-        tab.value.document.testRunnerMeta.totalTests += passed + failed
-        tab.value.document.testRunnerMeta.passedTests += passed
-        tab.value.document.testRunnerMeta.failedTests += failed
-
-        // Update request with results and propagate pre-request script changes in the result collection
-        // Use response.req as it contains the effective request with resolved variables
-        const requestWithResults = {
-          ...updatedRequest,
-          ...response.req,
-          testResults: testResult,
-          response: options.persistResponses ? response : null,
-          isLoading: false,
-        }
-
-        this.updateRequestAtPath(
-          tab.value.document.resultCollection!,
-          path,
-          requestWithResults
-        )
-
-        if (response.type === "success" || response.type === "fail") {
-          tab.value.document.testRunnerMeta.totalTime +=
-            response.meta.responseDuration
-          tab.value.document.testRunnerMeta.completedRequests += 1
-        }
-      } else {
-        const errorMsg = "Request execution failed"
-
-        // Update request with error in the result collection
-        this.updateRequestAtPath(tab.value.document.resultCollection!, path, {
-          error: errorMsg,
-          isLoading: false,
-          response: {
-            type: "network_fail",
-            error: "Unknown",
-            req: request,
-          },
-        })
-
-        if (options.stopOnError) {
-          tab.value.document.status = "stopped"
-          throw new Error("Test execution stopped due to error")
-        }
-      }
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === "Test execution stopped"
-      ) {
-        throw error
-      }
-
-      const errorMsg =
-        error instanceof Error ? error.message : "Unknown error occurred"
-
-      // Update request with error in the result collection
-      this.updateRequestAtPath(tab.value.document.resultCollection!, path, {
-        error: errorMsg,
-        isLoading: false,
-      })
-
-      if (options.stopOnError) {
-        tab.value.document.status = "stopped"
-        throw new Error("Test execution stopped due to error")
-      }
-    }
-  }
-
-  private getTestResultInfo(testResult: HoppTestData) {
-    let passed = 0
-    let failed = 0
-
-    for (const result of testResult.expectResults) {
-      if (result.status === "pass") {
-        passed++
-      } else if (result.status === "fail") {
-        failed++
-      }
-    }
-
-    for (const nestedTest of testResult.tests) {
-      const nestedResult = this.getTestResultInfo(nestedTest)
-      passed += nestedResult.passed
-      failed += nestedResult.failed
-    }
-
-    return { passed, failed }
+    return count
   }
 }

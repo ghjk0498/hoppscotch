@@ -11,43 +11,51 @@ import { getModule } from "."
 import { getKernelMode } from "@hoppscotch/kernel"
 import { diag } from "./log"
 
+// Helper to get location info safely in both Main Thread and Workers
+const getLocationInfo = () => {
+  if (typeof globalThis.window !== "undefined") {
+    return {
+      search: globalThis.window.location.search,
+      host: globalThis.window.location.host,
+      href: globalThis.window.location.href,
+    }
+  }
+  // In workers, self.location is available
+  if (typeof globalThis.location !== "undefined") {
+    return {
+      search: globalThis.location.search,
+      host: globalThis.location.host,
+      href: globalThis.location.href,
+    }
+  }
+  return { search: "", host: "localhost", href: "" }
+}
+
+const loc = getLocationInfo()
+
 // on desktop, org webviews share the same app:// origin as the main webview
 // (to keep Tauri IPC working). the org context is passed as a query param
 // (?org=test-org.hoppscotch.io) instead. we include it in the store path so
 // each org gets its own store file on disk, preserving per-org isolation for
 // auth tokens, settings, collections, etc.
-//
-// the org param is the raw host (e.g. "test-org.hoppscotch.io") so we
-// sanitize it the same way Tauri sanitizes window labels: replace all
-// non-alphanumeric chars with underscores. this produces the same filename
-// as the old per-hostname approach (test_org_hoppscotch_io.hoppscotch.store)
-// the ?org= query param is preserved across Vue Router navigations by
-// a beforeEach guard in modules/router.ts, and survives full-page reloads
-// because Tauri sets it on the initial webview URL
-const orgParam = new URLSearchParams(window.location.search).get("org")
+const orgParam = new URLSearchParams(loc.search).get("org")
 const HOST_SCOPED_STORE_PATH = orgParam
   ? `${orgParam.replace(/[^a-zA-Z0-9]/g, "_")}.hoppscotch.store`
-  : `${window.location.host}.hoppscotch.store`
+  : `${loc.host}.hoppscotch.store`
 
 // process-wide store file shared across orgs. holds machine-level state
 // (desktop settings, recent-instances list, update state) that should
-// not vary per organization. file name matches the path each shell's
-// own `kernel/store.ts` wrapper writes to and the path
-// `DesktopPersistenceService` uses on the Tauri side, so common
-// composables that bind here read/write the same physical file the
-// shell does.
+// not vary per organization.
 const UNIFIED_STORE_PATH = "hoppscotch-unified.store"
 
 diag("store", "--- COMMON store.ts module evaluated ---")
 diag("store", "orgParam:", orgParam ?? "(none)")
 diag("store", "HOST_SCOPED_STORE_PATH:", HOST_SCOPED_STORE_PATH)
 diag("store", "UNIFIED_STORE_PATH:", UNIFIED_STORE_PATH)
-diag("store", "window.location.host:", window.location.host)
-diag("store", "window.location.href:", window.location.href)
+diag("store", "loc.host:", loc.host)
+diag("store", "loc.href:", loc.href)
 
-// Lazy-loaded Tauri APIs. Module-scoped so every scoped store shares
-// the init step and the loaded modules. Web mode never resolves these
-// because `isInitd` returns early outside desktop.
+// Lazy-loaded Tauri APIs
 let invoke:
   | (<T>(cmd: string, args?: Record<string, unknown>) => Promise<T>)
   | undefined
@@ -110,11 +118,6 @@ export const getLogsDir = async (): Promise<string> => {
   return await invoke<string>("get_logs_dir")
 }
 
-// Factory for a Store wrapper bound to a specific store file. Each
-// instance keeps its own resolved-path cache so two scoped stores
-// never alias their absolute paths. Tauri-API loading and kernel
-// module access are module-scoped above, so the factory only
-// handles the per-store concerns.
 function createScopedStore(staticPath: string) {
   let cachedStorePath: string | undefined
 
@@ -271,14 +274,5 @@ function createScopedStore(staticPath: string) {
   } as const
 }
 
-// Org-scoped store. Holds per-org state (auth tokens, collections,
-// environments, settings that vary by organization). Default Store
-// for almost every consumer in common.
 export const Store = createScopedStore(HOST_SCOPED_STORE_PATH)
-
-// Process-wide store shared across orgs. Holds machine-level state
-// like desktop settings, the recent-instances list, and update state.
-// Use this for anything that should persist regardless of which org
-// the user is viewing, and for state that the desktop shell also
-// reads or writes through its own kernel/store wrapper.
 export const UnifiedStore = createScopedStore(UNIFIED_STORE_PATH)
