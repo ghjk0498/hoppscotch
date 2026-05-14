@@ -186,12 +186,12 @@ export const changeAppLanguage = async (locale: string) => {
 /**
  * Returns the i18n instance
  */
-export function getI18n() {
+export function getI18n(): (key: string, ...args: any[]) => string {
   if (!i18nInstance) {
     // Fallback for workers or before initialization
     return (key: string) => key
   }
-  return i18nInstance.global.t
+  return i18nInstance.global.t as any
 }
 
 export default <HoppModule>{
