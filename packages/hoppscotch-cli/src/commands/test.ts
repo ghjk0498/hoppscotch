@@ -57,18 +57,34 @@ export const test = (pathOrId: string, options: TestCmdOptions) => async () => {
       }
 
       // Check the file extension
-      if (path.extname(iterationData) !== ".csv") {
+      const fileExt = path.extname(iterationData);
+      if (fileExt !== ".csv" && fileExt !== ".json") {
         throw error({
           code: "INVALID_DATA_FILE_TYPE",
           data: iterationData,
         });
       }
 
-      const csvData = fs.readFileSync(iterationData, "utf8");
-      parsedIterationData = Papa.parse(csvData, { header: true }).data;
+      const fileData = fs.readFileSync(iterationData, "utf8");
+
+      if (fileExt === ".csv") {
+        parsedIterationData = Papa.parse(fileData, { header: true }).data;
+      } else {
+        try {
+          parsedIterationData = JSON.parse(fileData);
+          if (!Array.isArray(parsedIterationData)) {
+            throw new Error("JSON data must be an array of objects");
+          }
+        } catch (e) {
+          throw error({
+            code: "INVALID_DATA_FILE_TYPE",
+            data: iterationData,
+          });
+        }
+      }
 
       // Transform data into the desired format
-      transformedIterationData = parsedIterationData
+      transformedIterationData = (parsedIterationData as any[])
         .map((item) => {
           const iterationDataItem = item as Record<string, unknown>;
           const keys = Object.keys(iterationDataItem);

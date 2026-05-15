@@ -142,10 +142,10 @@ export const combineEnvVariables = (variables: {
   requestVariables: Environment["variables"]
   collectionVariables: Environment["variables"]
 }) => [
-  ...variables.requestVariables,
-  ...variables.collectionVariables,
   ...(variables.environments.temp ?? []),
+  ...variables.requestVariables,
   ...variables.environments.selected,
+  ...variables.collectionVariables,
   ...variables.environments.global,
 ]
 

@@ -241,6 +241,7 @@ export const processRequest =
       collectionVariables,
       inheritedPreRequestScripts = [],
       inheritedTestScripts = [],
+      iterationData = [],
     } = params;
 
     // Initialising updatedEnvs with given parameter envs, will eventually get updated.
@@ -280,7 +281,8 @@ export const processRequest =
       processedEnvs,
       legacySandbox ?? false,
       collectionVariables,
-      inheritedPreRequestScripts
+      inheritedPreRequestScripts,
+      iterationData
     )();
     if (E.isLeft(preRequestRes)) {
       printPreRequestRunner.fail();

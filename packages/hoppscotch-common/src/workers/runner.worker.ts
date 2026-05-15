@@ -77,6 +77,15 @@ async function handleStartRun(
     for (let i = 0; i < iterations; i++) {
       if (stopRequested) break
 
+      // Reset temp and selected environments to initial state for each iteration
+      // to prevent data from accumulating or persisting across iterations
+      currentEnvs.temp = cloneDeep(
+        initialEnvironmentState.initialEnvs.temp || []
+      )
+      currentEnvs.selected = cloneDeep(
+        initialEnvironmentState.initialEnvs.selected || []
+      )
+
       const iterationData =
         dataset.length > 0 ? dataset[i % dataset.length] : undefined
       if (iterationData) {
@@ -87,8 +96,8 @@ async function handleStartRun(
           currentValue: String(value),
           secret: false,
         }))
-        // Ensure temp exists
-        currentEnvs.temp = [...(currentEnvs.temp || []), ...tempVars]
+        // Ensure iteration data takes top priority in the temp scope
+        currentEnvs.temp = [...tempVars, ...currentEnvs.temp]
       }
 
       const parentPath = iterations > 1 ? [i] : []

@@ -46,4 +46,5 @@ export type ProcessRequestParams = {
   collectionVariables?: HoppCollectionVariable[];
   inheritedPreRequestScripts?: string[];
   inheritedTestScripts?: string[];
+  iterationData?: HoppEnvPair[];
 };

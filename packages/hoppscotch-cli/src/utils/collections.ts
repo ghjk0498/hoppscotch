@@ -75,18 +75,12 @@ export const collectionsRunner = async (
     // Reset `envs` to the original value at the start of each iteration
     envs.selected = [...originalSelectedEnvs];
 
-    if (iterationData) {
-      // Ensure last item is picked if the iteration count exceeds size of the iteration data
-      const iterationDataItem =
-        iterationData[Math.min(count, iterationData.length - 1)];
+    let iterationDataItem: HoppEnvPair[] | undefined;
 
-      // Ensure iteration data takes priority over supplied environment variables
-      envs.selected = envs.selected
-        .filter(
-          (envPair) =>
-            !iterationDataItem.some((dataPair) => dataPair.key === envPair.key)
-        )
-        .concat(iterationDataItem);
+    if (iterationData) {
+      // Pick iteration data for the current iteration
+      iterationDataItem =
+        iterationData[Math.min(count, iterationData.length - 1)];
     }
 
     for (const { collection, path } of collectionQueue) {
@@ -96,7 +90,10 @@ export const collectionsRunner = async (
         envs,
         resolvedDelay,
         requestsReport,
-        legacySandbox
+        legacySandbox,
+        [], // ancestorPreRequestScripts
+        [], // ancestorTestScripts
+        iterationDataItem
       );
     }
   }
@@ -112,7 +109,8 @@ const processCollection = async (
   requestsReport: RequestReport[],
   legacySandbox?: boolean,
   ancestorPreRequestScripts: string[] = [],
-  ancestorTestScripts: string[] = []
+  ancestorTestScripts: string[] = [],
+  iterationData?: HoppEnvPair[]
 ) => {
   // Accumulate scripts from root -> current collection for inheritance
   // filterValidScripts strips empty, whitespace-only, and module-prefix-only scripts
@@ -143,6 +141,7 @@ const processCollection = async (
       collectionVariables,
       inheritedPreRequestScripts,
       inheritedTestScripts,
+      iterationData,
     };
 
     // Request processing initiated message.
@@ -206,7 +205,8 @@ const processCollection = async (
       requestsReport,
       legacySandbox,
       inheritedPreRequestScripts,
-      inheritedTestScripts
+      inheritedTestScripts,
+      iterationData
     );
   }
 };

@@ -276,11 +276,17 @@ export const getResourceContents = async (
 export const getResolvedVariables = (
   requestVariables: HoppRESTRequestVariables,
   environmentVariables: EnvironmentVariable[],
-  collectionVariables: HoppCollectionVariable[] = []
+  collectionVariables: HoppCollectionVariable[] = [],
+  iterationData: EnvironmentVariable[] = []
 ): EnvironmentVariable[] => {
+  const iterationDataKeys = iterationData.map(({ key }) => key);
+
   // Transforming request variables to the shape of environment variables
   const activeRequestVariables = requestVariables
-    .filter(({ active, value }) => active && value)
+    .filter(
+      ({ active, value, key }) =>
+        active && value && !iterationDataKeys.includes(key)
+    )
     .map(({ key, value }) => ({
       key,
       initialValue: value,
@@ -290,23 +296,27 @@ export const getResolvedVariables = (
 
   const requestVariableKeys = activeRequestVariables.map(({ key }) => key);
 
-  // Request variables have higher priority, hence filtering out collection variables with the same keys
-  const filteredCollectionVariables = collectionVariables.filter(
-    ({ key }) => !requestVariableKeys.includes(key)
+  // Filtering out environment variables that have keys present in iteration data or request variables
+  const filteredEnvironmentVariables = environmentVariables.filter(
+    ({ key }) =>
+      ![...iterationDataKeys, ...requestVariableKeys].includes(key)
   );
 
-  const collectionVariableKeys = filteredCollectionVariables.map(
+  const environmentVariableKeys = filteredEnvironmentVariables.map(
     ({ key }) => key
   );
 
-  // Filtering out environment variables that have keys present in request or collection variables
-  const filteredEnvironmentVariables = environmentVariables.filter(
+  // Collection variables now have the lowest priority among these, so filter against all above
+  const filteredCollectionVariables = collectionVariables.filter(
     ({ key }) =>
-      ![...requestVariableKeys, ...collectionVariableKeys].includes(key)
+      ![
+        ...iterationDataKeys,
+        ...requestVariableKeys,
+        ...environmentVariableKeys,
+      ].includes(key)
   );
 
-  // Setting currentValue to initialValue for environment variables
-  // because the exported file might not have the currentValue field
+  // Setting currentValue to initialValue
   const processedEnvironmentVariables = filteredEnvironmentVariables.map(
     ({ key, initialValue, currentValue, secret }) => ({
       key,
@@ -328,8 +338,9 @@ export const getResolvedVariables = (
   );
 
   return [
+    ...iterationData,
     ...activeRequestVariables,
-    ...processedCollectionVariables,
     ...processedEnvironmentVariables,
+    ...processedCollectionVariables,
   ];
 };

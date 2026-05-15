@@ -16,7 +16,7 @@
 - **Data Flow**:
   - Iterates through `iterations`.
   - Injects `iterationData` into `initialEnvs.temp`.
-  - **Priority Rule (Fixed)**: `iterationData` > `Request Variables` > `Collection Variables` > `Selected Environment` > `Global`.
+  - **Priority Rule (Fixed)**: `Iteration Data` > `Request Variables` > `Selected Environment` > `Collection Variables` > `Global`.
   - Results are progressively added to `tab.value.document.resultCollection`.
 
 ### 3. Variable Resolution

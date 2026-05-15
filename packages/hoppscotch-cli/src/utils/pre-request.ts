@@ -54,7 +54,8 @@ export const preRequestScriptRunner = (
   envs: HoppEnvs,
   legacySandbox: boolean,
   collectionVariables?: HoppCollectionVariable[],
-  inheritedPreRequestScripts: string[] = []
+  inheritedPreRequestScripts: string[] = [],
+  iterationData: HoppEnvPair[] = []
 ): TE.TaskEither<
   HoppCLIError,
   { effectiveRequest: EffectiveHoppRESTRequest } & { updatedEnvs: HoppEnvs }
@@ -105,7 +106,8 @@ export const preRequestScriptRunner = (
             const result = await getEffectiveRESTRequest(
               finalRequest,
               envForEffectiveRequest,
-              collectionVariables
+              collectionVariables,
+              iterationData
             );
             // Replace the updatedEnvs from getEffectiveRESTRequest with the one from pre-request script
             // This preserves the global/selected separation
@@ -144,7 +146,8 @@ export const preRequestScriptRunner = (
 export async function getEffectiveRESTRequest(
   request: HoppRESTRequest,
   environment: Environment,
-  collectionVariables?: HoppCollectionVariable[]
+  collectionVariables?: HoppCollectionVariable[],
+  iterationData: HoppEnvPair[] = []
 ): Promise<
   E.Either<
     HoppCLIError,
@@ -156,7 +159,8 @@ export async function getEffectiveRESTRequest(
   const resolvedVariables = getResolvedVariables(
     request.requestVariables,
     envVariables,
-    collectionVariables
+    collectionVariables,
+    iterationData
   );
 
   // Parsing final headers with applied ENVs.

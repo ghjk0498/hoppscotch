@@ -18,10 +18,10 @@
 ## Core Knowledge: Variable Priority
 
 러너(Runner) 실행 시 변수 우선순위는 다음과 같습니다 (상단일수록 우선):
-1. **Iteration Data (임시 변수/데이터 파일)**: `initialEnvs.temp` (최상위 우선순위 적용됨)
+1. **Iteration Data (JSON/CSV 데이터)**: 데이터 기반 테스트의 핵심 값 (최우선)
 2. **Request Variables**: 각 요청에 정의된 변수
-3. **Collection Variables**: 컬렉션/폴더 상속 변수
-4. **Environment Variables**: 선택된 환경 변수
+3. **Environment Variables**: 선택된 환경 변수 (Postman 표준 준수)
+4. **Collection Variables**: 컬렉션/폴더 상속 변수
 5. **Global Variables**: 전역 변수
 
 ---
